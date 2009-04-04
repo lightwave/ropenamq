@@ -85,7 +85,7 @@ module AMQ
       args[:immediate] ||= false
 
       @sess.publish_body(args[:body], args[:exchange], args[:routing_key],
-                         args[:mandatory], args[:immediate])
+                         args[:mandatory], args[:immediate], args[:reply_to])
     end
 
     def publish_content(args)
@@ -145,11 +145,19 @@ module AMQ
       if block_given?
         consumer_tag = @sess.consumer_tag
         loop do
-          if @sess.wait(args[:timeout]) != 0
+          rc = @sess.wait(args[:timeout])
+          if rc != 0
             # session died
-            puts "wait returns non zero"
+            puts "wait returns non zero: #{rc}"
             break
           end
+
+          if @sess.basic_arrived_count == 0
+            # timed out
+            # TODO: should probably raise an exception
+            return :timed_out
+          end
+
           while @sess.basic_arrived_count > 0
             begin
               content = @sess.basic_arrived
@@ -161,10 +169,29 @@ module AMQ
             end # begin
           end # while
         end # loop
-        puts "call basic cancel"
         @sess.basic_cancel(consumer_tag)
       end
 
+    end
+
+    require 'pp'
+    # Takes all the arguments that publish method takes. In addition, timeout
+    # (in seconds) for waiting for reply can be specified
+    def request(args)
+      args = args.dup
+
+      # Create a private reply queue
+      queue = declare_and_bind_private_queue()
+      # Send out the request
+      args[:reply_to] = queue
+      publish(args)
+
+      # Listen for the reply msg(s)
+      consume(:queue => queue,
+              :exclusive => true,
+              :timeout => args[:timeout]) do |body, content|
+        return body
+      end
     end
 
     def method_missing(meth, *args, &blk)
@@ -174,6 +201,20 @@ module AMQ
         super.method_missing(meth, *args, &blk)
       end
     end
+
+    private
+
+    # Declare a private queue and bind it.  Return the private queue name
+    def declare_and_bind_private_queue
+      declare_queue(:exclusive => true, :auto_delete => true)
+      bind_queue(
+        :exchange => "amq.direct",
+        :queue => @sess.queue,
+        :routing_key => @sess.queue)
+      # Get the private queue name from the session
+      @sess.queue
+    end
+
   end
 
   class BasicContent

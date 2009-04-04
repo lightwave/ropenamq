@@ -562,10 +562,12 @@ static VALUE rwire_amq_client_session_publish_body(VALUE self,
 	VALUE exchange,
 	VALUE routing_key,
         VALUE r_mandatory,
-        VALUE r_immediate)
+        VALUE r_immediate,
+        VALUE r_reply_to)
 {
 	char * exch = NULL;
 	char * rkey = NULL;
+	char * reply_to = NULL;
 
 	bool mandatory = TO_BOOL(r_mandatory);
 	bool immediate = TO_BOOL(r_immediate);
@@ -581,9 +583,15 @@ static VALUE rwire_amq_client_session_publish_body(VALUE self,
 		rkey = StringValuePtr(routing_key);
 	}
 
+	if (!NIL_P(r_reply_to)) {
+		reply_to = StringValuePtr(r_reply_to);
+	}
+
 	Data_Get_Struct(self, amq_client_session_t, session);
 
 	int rc = 0;
+	char * errmsg = NULL;
+
 	do {
 		char * blob = new_blob_from_rb_str(body);
 		int    size = RSTRING_LEN(body);
@@ -591,19 +599,34 @@ static VALUE rwire_amq_client_session_publish_body(VALUE self,
 		// Set the content body
 		rc = amq_content_basic_set_body(content, blob, size, free);
 		if (rc) {
-			rb_raise(eAMQError, "Unable to set content body");
+			errmsg = "Unable to set content body";
+			break;
+		}
+
+		// Set the reply_to field if passed in
+		if (reply_to) {
+			rc = amq_content_basic_set_reply_to(content, reply_to);
+			if (rc) {
+				errmsg = "Unable to set reply_to field";
+				break;
+			}
+
 		}
 
 		// Publish
 		rc = amq_client_session_basic_publish(session, content, 0, exch, rkey, mandatory, immediate);
 		if (rc) {
-			rb_raise(eAMQError, "Failed to publish message");
+			errmsg = "Failed to publish message";
+			break;
 		}
 
 	} while (false);
 
 	if (content) {
 		amq_content_basic_unlink(&content);
+	}
+	if (rc) {
+		rb_raise(eAMQError, errmsg);
 	}
 
 	//TODO check for a more useful value to return
@@ -697,7 +720,7 @@ static VALUE rwire_amq_client_session_get_alive(VALUE self)
 
 	Data_Get_Struct(self, amq_client_session_t, session);
 
-	bool * alive = amq_client_session_get_alive(session);
+	bool alive = amq_client_session_get_alive(session);
 
 	return (alive ? Qtrue : Qfalse);
 }
@@ -878,7 +901,7 @@ void Init_rwire()
 	//RB_DEF_SESS_METHOD(queue_delete, 0);
 	RB_DEF_SESS_METHOD(consume, 5);
 	RB_DEF_SESS_METHOD(basic_cancel, 1);
-	RB_DEF_SESS_METHOD(publish_body, 5);
+	RB_DEF_SESS_METHOD(publish_body, 6);
 	RB_DEF_SESS_METHOD(publish_content, 5);
 	//RB_DEF_SESS_METHOD(basic_ack, 0);
 	//RB_DEF_SESS_METHOD(basic_reject, 0);

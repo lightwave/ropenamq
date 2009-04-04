@@ -1,0 +1,10 @@
+To build,
+
+export IBASE=<OpenAMQ's install directory>
+
+ruby extconf.rb
+make
+
+To install,
+
+sudo make install

@@ -671,6 +671,26 @@ static VALUE rwire_amq_client_session_publish_content(VALUE self,
 	return self;
 }
 
+static VALUE rwire_amq_client_session_basic_get(VALUE self, VALUE queuename)
+{
+	char *_queuename              = NULL;
+	amq_client_session_t *session = NULL;
+
+	if (queuename != Qnil)
+		_queuename = StringValuePtr(queuename);
+
+	Data_Get_Struct(self, amq_client_session_t, session);
+
+	int rc = amq_client_session_basic_get(session,0, _queuename, 0);
+
+	if (rc)
+	{
+		rb_raise(eAMQError, "Failed to basic get");
+	}
+
+	return self;
+}
+
 static VALUE rwire_amq_client_session_get_basic_arrived(VALUE self)
 {
 	VALUE rb_content;
@@ -698,6 +718,37 @@ static VALUE rwire_amq_client_session_get_basic_arrived_count(VALUE self)
 	Data_Get_Struct(self, amq_client_session_t, session);
 
 	int rc = amq_client_session_get_basic_arrived_count(session);
+
+	return INT2FIX(rc);
+}
+
+static VALUE rwire_amq_client_session_get_basic_returned(VALUE self)
+{
+	VALUE rb_content;
+	amq_client_session_t * session = NULL;
+	amq_content_basic_t  * content = NULL;
+
+	Data_Get_Struct(self, amq_client_session_t, session);
+
+	content = amq_client_session_basic_returned(session);
+
+	if (content)
+	{
+		rb_content = Data_Wrap_Struct(cContent, 0, rwire_amq_content_basic_free, content);
+		return rb_content;
+	}
+	else
+		return Qnil;
+
+}
+
+static VALUE rwire_amq_client_session_get_basic_returned_count(VALUE self)
+{
+	amq_client_session_t * session = NULL;
+
+	Data_Get_Struct(self, amq_client_session_t, session);
+
+	int rc = amq_client_session_get_basic_returned_count(session);
 
 	return INT2FIX(rc);
 }
@@ -888,6 +939,8 @@ void Init_rwire()
 	RB_DEF_SESS_METHOD(wait, 1); // timeout
 	RB_DEF_SESS_GETTER(basic_arrived);
 	RB_DEF_SESS_GETTER(basic_arrived_count);
+	RB_DEF_SESS_GETTER(basic_returned);
+	RB_DEF_SESS_GETTER(basic_returned_count);
 	RB_DEF_SESS_BOOL_GETTER(alive);
 
 	//RB_DEF_SESS_METHOD(channel_flow, 0);
@@ -905,7 +958,7 @@ void Init_rwire()
 	RB_DEF_SESS_METHOD(publish_content, 5);
 	//RB_DEF_SESS_METHOD(basic_ack, 0);
 	//RB_DEF_SESS_METHOD(basic_reject, 0);
-	//RB_DEF_SESS_METHOD(basic_get, 0);
+	RB_DEF_SESS_METHOD(basic_get, 1);
 
 	//RB_DEF_SESS_BOOL_GETTER(silent);
 	RB_DEF_SESS_GETTER(error_text);

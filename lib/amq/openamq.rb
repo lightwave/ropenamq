@@ -179,6 +179,8 @@ module AMQ
     # (in seconds) for waiting for reply can be specified
     def request(args)
       args = args.dup
+      args[:immediate] = true
+      args[:mandatory] = true
 
       # Create a private reply queue
       queue = declare_and_bind_private_queue()
@@ -186,11 +188,25 @@ module AMQ
       args[:reply_to] = queue
       publish(args)
 
+      args[:timeout] ||= 500
+
       # Listen for the reply msg(s)
-      consume(:queue => queue,
-              :exclusive => true,
-              :timeout => args[:timeout]) do |body, content|
-        return body
+      consume(:queue     => queue,
+              :exclusive => true)
+
+      rc = wait(args[:timeout])
+      if rc == 0
+        if basic_returned_count > 0
+          raise AMQError.new("Failed to send request.  Message returned from broker.")
+        end
+
+        if basic_arrived_count == 0
+          return :timeout
+        end
+
+        return basic_arrived.body
+      else
+        raise AMQError.new("Failed.  Interrupted while waiting for response.")
       end
     end
 
@@ -202,7 +218,7 @@ module AMQ
       end
     end
 
-    private
+  private
 
     # Declare a private queue and bind it.  Return the private queue name
     def declare_and_bind_private_queue

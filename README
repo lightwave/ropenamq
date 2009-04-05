@@ -8,3 +8,18 @@ make
 To install,
 
 sudo make install
+
+Example
+=======
+
+require 'amq/openamq'
+
+# Create an OpenAMQ connection
+AMQ::Connection.connect() do |c|
+  # Create an OpenAMQ Session
+  c.new_session() do |s|
+    # Publish a request message 'Hello' using foobar is the routing key.
+    # And listen for response back.  The AMQP content body is returned.
+    puts s.request(:body => "Hello", :routing_key => "foobar")
+  end
+end

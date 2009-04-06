@@ -9,6 +9,24 @@ To install,
 
 sudo make install
 
+Disclaimer
+==========
+Please read the LICENSE file carefully.
+
+This Ruby binding for OpenAMQ is still under continuous development. It is
+being used in production environment. However, the higher-level ruby interface
+in lib/amq/openamq.rb is still evolving. It is not very Ruby'ish yet. The
+RWire module is just a thin wrapper around the WireAPI, which is relatively
+stable. i.e., it's unlikely to change going forward. I can't guarantee that
+the Ruby abstraction layer will be backward compatible as it's still evolving.
+Use at your own risk.
+
+Platforms
+=========
+
+Tested only on Mac OS X 10.5.6 and Linux Ubuntu. Other platforms have not been
+tested.
+
 Example
 =======
 

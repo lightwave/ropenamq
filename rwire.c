@@ -491,6 +491,32 @@ static VALUE rwire_amq_client_session_declare_queue(VALUE self,
 	return self;
 }
 
+static VALUE rwire_amq_client_session_delete_queue(VALUE self,
+	VALUE queuename,
+	VALUE if_unused,
+	VALUE if_empty)
+{
+
+	char *_queuename              = NULL;
+	amq_client_session_t *session = NULL;
+
+	if (queuename != Qnil)
+		_queuename = StringValuePtr(queuename);
+
+	bool _if_unused = (if_unused != Qfalse);
+	bool _if_empty  = (if_empty != Qfalse);
+
+	Data_Get_Struct(self, amq_client_session_t, session);
+	amq_client_session_queue_delete(
+		session,
+		0,
+		_queuename,
+		_if_unused,
+		_if_empty);
+//TODO check for a more useful value to return
+	return self;
+}
+
 static VALUE rwire_amq_client_session_bind_queue(VALUE self,
 	VALUE queuename,
 	VALUE exchange,
@@ -948,6 +974,7 @@ void Init_rwire()
 	RB_DEF_SESS_METHOD(declare_exchange, 6);
 	//RB_DEF_SESS_METHOD(exchange_delete, 0);
 	RB_DEF_SESS_METHOD(declare_queue, 5);
+	RB_DEF_SESS_METHOD(delete_queue, 3);
 	RB_DEF_SESS_METHOD(bind_queue, 3);
 	//RB_DEF_SESS_METHOD(queue_unbind, 0);
 	//RB_DEF_SESS_METHOD(queue_purge, 0);

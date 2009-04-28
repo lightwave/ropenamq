@@ -53,6 +53,10 @@ module AMQ
       end
     end
 
+    def close
+      destroy
+    end
+
     def new_session()
       s = Session.new(@conn.session_new(), self)
       if block_given?
@@ -77,6 +81,10 @@ module AMQ
     def initialize(rwire_session, connection)
       @conn = connection
       @sess = rwire_session
+    end
+
+    def close
+      destroy
     end
 
     def publish(args)
@@ -117,15 +125,25 @@ module AMQ
 
     def declare_queue(args)
       args[:queue]       ||= args[:name] || nil
-    	args[:passive]     ||= false
-    	args[:durable]     ||= false
-    	args[:exclusive]   ||= false
-    	args[:auto_delete] ||= false
-    	@sess.declare_queue(args[:queue],
-    	                    args[:passive],
-    	                    args[:durable],
-    	                    args[:exclusive],
-    	                    args[:auto_delete])
+      args[:passive]     ||= false
+      args[:durable]     ||= false
+      args[:exclusive]   ||= false
+      args[:auto_delete] ||= false
+      @sess.declare_queue(args[:queue],
+                          args[:passive],
+                          args[:durable],
+                          args[:exclusive],
+                          args[:auto_delete])
+
+    end
+
+    def delete_queue(args)
+      args[:queue]       ||= args[:name] || nil
+      args[:if_unsed] = true unless args.has_key?(:if_unsed)
+      args[:if_empty] = true unless args.has_key?(:if_empty)
+      @sess.delete_queue(args[:queue],
+                         args[:if_unsed],
+                         args[:if_empty])
 
     end
 
@@ -169,9 +187,11 @@ module AMQ
             end # begin
           end # while
         end # loop
+      end
+    ensure
+      if block_given?
         @sess.basic_cancel(consumer_tag)
       end
-
     end
 
     require 'pp'
@@ -179,8 +199,10 @@ module AMQ
     # (in seconds) for waiting for reply can be specified
     def request(args)
       args = args.dup
-      args[:immediate] = true
+      args[:immediate] = false
       args[:mandatory] = true
+
+      consumer_tag = nil
 
       # Create a private reply queue
       queue = declare_and_bind_private_queue()
@@ -193,6 +215,8 @@ module AMQ
       # Listen for the reply msg(s)
       consume(:queue     => queue,
               :exclusive => true)
+
+      consumer_tag = @sess.consumer_tag
 
       rc = wait(args[:timeout])
       if rc == 0
@@ -208,6 +232,8 @@ module AMQ
       else
         raise AMQError.new("Failed.  Interrupted while waiting for response.")
       end
+    ensure
+      @sess.basic_cancel(consumer_tag) if consumer_tag
     end
 
     def method_missing(meth, *args, &blk)
